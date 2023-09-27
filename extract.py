@@ -19,7 +19,7 @@ highpass_str = 5
 lowpass_str = 4
 threads = 16
 wm_level = 4
-shuffle_key = 6387
+random_placement_key = 1984
 
 # python extract.py -i video/life_300_wm.mp4 -o result/life_300_wm.json -k 66666 -cl 60 -t 16 -wl 4
 # python extract.py -i /mnt/ssd1/H264_dirty_detect/experiment_diff_crf_NCC_key/video/life_300_wm_crf29.mp4 -o result/life_300_wm_crf29.json -k 66666 -cl 60 -t 16
@@ -32,7 +32,7 @@ shuffle_key = 6387
 
 
 # python extract.py -i video/life_300_wm_sk-1.mp4 -o result/life_300_wm_sk-1.json -k 66666 -cl 60 -t 16 -wl 4 -sk -1
-# python extract.py -i video/life_300_wm_sk9999.mp4 -o result/life_300_wm_sk9999.json -k 66666 -cl 60 -t 16 -wl 4 -sk 9999
+# python extract.py -i video/life_300_wm_rpk1984.mp4 -o result/life_300_wm_rpk1984.json -k 66666 -cl 60 -t 16 -wl 4 -rpk 1984
 
 parser = argparse.ArgumentParser(description="Blind Video Watermarking in DTCWT Domain")
 parser.add_argument(
@@ -56,11 +56,11 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "-sk",
-    dest="shuffle_key",
+    "-rpk",
+    dest="random_placement_key",
     type=int,
-    default=6387,
-    help="Set shuffle key",
+    default=1984,
+    help="Set random_placement_key",
 )
 
 parser.add_argument(
@@ -109,7 +109,7 @@ highpass_str = args.highpass_str
 lowpass_str = args.lowpass_str
 threads = args.threads
 wm_level = args.wm_level
-shuffle_key = args.shuffle_key
+random_placement_key = args.random_placement_key
 
 
 wm_coeffs = 0
@@ -121,38 +121,6 @@ def rebin(a, shape):
         a = np.vstack((a, np.zeros((1, a.shape[1]))))
     sh = shape[0], a.shape[0] // shape[0], shape[1], a.shape[1] // shape[1]
     return a.reshape(sh).mean(-1).mean(1)
-
-
-def shuffle_matrix(matrix: np.ndarray, key) -> np.ndarray:
-    """Shuffle a 2D matrix using a given key."""
-    np.random.seed(key)
-
-    # Shuffle rows
-    row_permutation = np.random.permutation(matrix.shape[0])
-    shuffled_matrix = matrix[row_permutation, :]
-
-    # Shuffle columns
-    col_permutation = np.random.permutation(matrix.shape[1])
-    shuffled_matrix = shuffled_matrix[:, col_permutation]
-
-    return shuffled_matrix
-
-
-def unshuffle_matrix(matrix: np.ndarray, key) -> np.ndarray:
-    """Unshuffle a shuffled 2D matrix using a given key."""
-    np.random.seed(key)
-
-    # Get original order of rows
-    row_permutation = np.random.permutation(matrix.shape[0])
-    row_reverse_permutation = np.argsort(row_permutation)
-    unshuffled_matrix = matrix[row_reverse_permutation, :]
-
-    # Get original order of columns
-    col_permutation = np.random.permutation(matrix.shape[1])
-    col_reverse_permutation = np.argsort(col_permutation)
-    unshuffled_matrix = unshuffled_matrix[:, col_reverse_permutation]
-
-    return unshuffled_matrix
 
 
 # generate wm through key
@@ -273,6 +241,69 @@ def recover_string_from_image(
     return final_string
 
 
+def get_random_pos(big_matrix_shape, small_matrices, seed=None):
+    # Set seed for reproducibility
+    random.seed(seed)
+    # Keep track of occupied positions
+    occupied = np.zeros(big_matrix_shape, dtype=bool)
+
+    random_position_list = []
+
+    for small_matrix in small_matrices:
+        small_height, small_width = small_matrix.shape
+
+        # Get all possible positions for this small matrix
+        possible_positions = [
+            (i, j)
+            for i in range(big_matrix_shape[0] - small_height + 1)
+            for j in range(big_matrix_shape[1] - small_width + 1)
+            if not np.any(occupied[i : i + small_height, j : j + small_width])
+        ]
+
+        # If no possible position, return an error
+        if not possible_positions:
+            raise ValueError(
+                "No space left for the matrix of shape {}".format(small_matrix.shape)
+            )
+
+        # Randomly select one position
+        chosen_position = random.choice(possible_positions)
+
+        # Place the small matrix at the chosen position
+        # big_matrix[chosen_position[0]:chosen_position[0]+small_height,
+        #            chosen_position[1]:chosen_position[1]+small_width] = small_matrix
+
+        random_position_list.append(
+            (
+                chosen_position[0],
+                chosen_position[0] + small_height,
+                chosen_position[1],
+                chosen_position[1] + small_width,
+            )
+        )
+
+        # Mark the position as occupied
+        occupied[
+            chosen_position[0] : chosen_position[0] + small_height,
+            chosen_position[1] : chosen_position[1] + small_width,
+        ] = True
+
+    return random_position_list
+
+
+def place_random_pos(big_matrix, small_matrices, random_pos):
+    for idx, small_matrix in enumerate(small_matrices):
+        small_height, small_width = small_matrix.shape
+
+        # Place the small matrix at the chosen position
+        big_matrix[
+            random_pos[idx][0] : random_pos[idx][1],
+            random_pos[idx][2] : random_pos[idx][3],
+        ] = small_matrix
+
+    return big_matrix
+
+
 def decode_frame(wmed_img):
     wmed_img = cv2.cvtColor(wmed_img.astype(np.float32), cv2.COLOR_BGR2YUV)
 
@@ -300,16 +331,6 @@ def decode_frame(wmed_img):
         inv_masks3[i] = 1.0 / masks3[i]
 
     shape = wmed_coeffs.highpasses[2][:, :, i].shape
-    # lv1_h, lv1_w = (((shape[0] + 1) // 2 + 1) // 2 + 1) // 2, (((shape[1] + 1) // 2 + 1) // 2 + 1) // 2
-    # lv2_h = (lv1_h + 1) // 2
-    # lv2_w = (lv1_w + 1) // 2
-    # lv3_h = (lv2_h + 1) // 2
-    # lv3_w = (lv2_w + 1) // 2
-
-    # # print(f'{h} {w}')
-    # level1_coeffs = np.zeros((lv1_h, lv1_w, 6), dtype="complex_")
-    # level2_coeffs = np.zeros((lv2_h, lv2_w, 6), dtype="complex_")
-    # level3_coeffs = np.zeros((lv3_h, lv3_w, 6), dtype="complex_")
 
     my_highpass = []
     h, w = (((shape[0] + 1) // 2 + 1) // 2 + 1) // 2, (
@@ -322,44 +343,57 @@ def decode_frame(wmed_img):
         w = (w + 1) // 2
         # print(my_highpass[i].shape)
 
-    for i in range(6):
-        if shuffle_key != -1:
-            shuffle_coeff = (
-                (wmed_coeffs.highpasses[2][:, :, i]) * inv_masks3[i] * 1 / highpass_str
-            )
-            coeff = unshuffle_matrix(shuffle_coeff, shuffle_key)
-        else:
-            coeff = (
-                (wmed_coeffs.highpasses[2][:, :, i]) * inv_masks3[i] * 1 / highpass_str
-            )
-        for lv in range(wm_level):
-            w = 0
-            h = 0
-            for m in range(lv):
-                # print(my_highpass[m].shape)
-                w += my_highpass[m].shape[1]
-                h += my_highpass[m].shape[0]
+    lowpass = np.zeros(
+        (my_highpass[-1].shape[0] * 2, my_highpass[-1].shape[1] * 2), dtype="complex_"
+    )
 
-            my_highpass[lv][:, :, i] = (
+    small_matrixs = []
+    small_matrixs.append(lowpass)
+    small_matrixs.append(lowpass)
+    small_matrixs.append(lowpass)
+    small_matrixs.append(lowpass)
+    for lv in range(wm_level):
+        # 4 times redudant in each level
+        small_matrixs.append(my_highpass[lv][:, :, 0])
+        small_matrixs.append(my_highpass[lv][:, :, 0])
+        small_matrixs.append(my_highpass[lv][:, :, 0])
+        small_matrixs.append(my_highpass[lv][:, :, 0])
+
+    random_positions = get_random_pos(
+        inv_masks3[0].shape, small_matrixs, random_placement_key
+    )
+
+    for i in range(6):
+        coeff = (wmed_coeffs.highpasses[2][:, :, i]) * inv_masks3[i] * 1 / highpass_str
+
+        for level in range(wm_level):
+            lv = level + 1  # to avoid first 4 position for lowpass
+            # print(random_positions[lv * 4])
+            # print(random_positions[lv * 4 + 1])
+            # print(random_positions[lv * 4 + 2])
+            # print(random_positions[lv * 4 + 3])
+            # print(my_highpass[level][:, :, i].shape)
+
+            my_highpass[level][:, :, i] = (
                 coeff[
-                    h : h + my_highpass[lv].shape[0], w : w + my_highpass[lv].shape[1]
+                    random_positions[lv * 4][0] : random_positions[lv * 4][1],
+                    random_positions[lv * 4][2] : random_positions[lv * 4][3],
                 ]
                 + coeff[
-                    coeff.shape[0] - h - my_highpass[lv].shape[0] : coeff.shape[0] - h,
-                    w : w + my_highpass[lv].shape[1],
+                    random_positions[lv * 4 + 1][0] : random_positions[lv * 4 + 1][1],
+                    random_positions[lv * 4 + 1][2] : random_positions[lv * 4 + 1][3],
                 ]
                 + coeff[
-                    h : h + my_highpass[lv].shape[0],
-                    coeff.shape[1] - w - my_highpass[lv].shape[1] : coeff.shape[1] - w,
+                    random_positions[lv * 4 + 2][0] : random_positions[lv * 4 + 2][1],
+                    random_positions[lv * 4 + 2][2] : random_positions[lv * 4 + 2][3],
                 ]
                 + coeff[
-                    coeff.shape[0] - h - my_highpass[lv].shape[0] : coeff.shape[0] - h,
-                    coeff.shape[1] - w - my_highpass[lv].shape[1] : coeff.shape[1] - w,
+                    random_positions[lv * 4 + 3][0] : random_positions[lv * 4 + 3][1],
+                    random_positions[lv * 4 + 3][2] : random_positions[lv * 4 + 3][3],
                 ]
             )
 
     highpasses = tuple(my_highpass)
-    # highpasses = wm_coeffs.highpasses
 
     ### extract watermark lowpass into V channel's highpass[2] (highpass as mask)
     lowpass_masks = [0 for i in range(6)]
@@ -380,32 +414,14 @@ def decode_frame(wmed_img):
         lowpass_masks[i][lowpass_masks[i] == 0] = 0.01
         inv_lowpass_masks[i] = 1.0 / lowpass_masks[i]
 
-    lowpass = np.zeros(
-        (my_highpass[-1].shape[0] * 2, my_highpass[-1].shape[1] * 2), dtype="complex_"
-    )
-
     for i in range(4):
-        if shuffle_key != -1:
-            shuffle_coeff = (
-                (v_coeffs.highpasses[2][:, :, i]) * inv_masks3[i] * 1 / highpass_str
-            )
-
-            coeff = unshuffle_matrix(shuffle_coeff, shuffle_key)
-        else:
-            coeff = (v_coeffs.highpasses[2][:, :, i]) * inv_masks3[i] * 1 / highpass_str
-
+        coeff = (v_coeffs.highpasses[2][:, :, i]) * inv_masks3[i] * 1 / lowpass_str
         lowpass[:, :] += coeff[
-            2 * my_highpass[0].shape[0] : 2 * my_highpass[0].shape[0]
-            + 2 * my_highpass[-1].shape[0],
-            2 * my_highpass[0].shape[1] : 2 * my_highpass[0].shape[1]
-            + 2 * my_highpass[-1].shape[1],
+            random_positions[0][0] : random_positions[0][1],
+            random_positions[0][2] : random_positions[0][3],
         ]
 
     lowpass = lowpass.real.astype(np.float32)
-    # lowpass = wm_coeffs.lowpass
-    ### extract watermark lowpass into V channel's highpass[2] end
-
-    # lowpass = np.full((h * 2, w * 2), 255)
 
     t = dtcwt.Transform2d()
     wm = t.inverse(dtcwt.Pyramid(lowpass, highpasses))
@@ -470,22 +486,22 @@ while True:
     for key, wm in pool_return:
         keys.append(key)
         overlap_wm += wm
-        cv2.imwrite(f"wm/{frame_idx}.png", wm)
+        # cv2.imwrite(f"wm/{frame_idx}.png", wm)
         frame_idx += 1
 
 
 overlap_wm /= frame_idx + 1
 overlap_key = recover_string_from_image(bit_to_pixel, code_length, overlap_wm)
-cv2.imwrite(f"wm/overlap.png", overlap_wm)
 
-# overlap_filename = os.path.basename(video_path)
-# overlap_filename = os.path.splitext(overlap_filename)[0]
-# print(f"/mnt/ssd1/H264_dirty_detect/Experiment/wm/{overlap_filename}.png")
-# cv2.imwrite(
-#     f"/mnt/ssd1/H264_dirty_detect/Experiment/wm/{overlap_filename}.png",
-#     overlap_wm,
-# )
+# cv2.imwrite(f"wm/overlap.png", overlap_wm)
 
+overlap_filename = os.path.basename(video_path)
+overlap_filename = os.path.splitext(overlap_filename)[0]
+print(f"/mnt/ssd1/H264_dirty_detect/Experiment/wm/{overlap_filename}.png")
+cv2.imwrite(
+    f"/mnt/ssd1/H264_dirty_detect/Experiment/wm/{overlap_filename}.png",
+    overlap_wm,
+)
 
 # output_dict = {"keys": keys, "ans": random_binary_string}
 output_dict = {"keys": [overlap_key], "ans": random_binary_string}
