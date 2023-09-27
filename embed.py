@@ -18,7 +18,7 @@ highpass_str = 5
 lowpass_str = 4
 threads = 16
 wm_level = 4
-random_placement_key = 1984
+random_placement_key = 9260
 
 # python embed.py -i /mnt/ssd1/H264_dirty_detect/video/life_300.mp4 -o video/life_300_wm.mp4 -k 66666 -cl 60 -t 16 -wl 4
 # python embed.py -i /mnt/ssd1/H264_dirty_detect/video/park_joy_300.mp4 -o video/park_joy_300_wm.mp4 -k 66666 -cl 60 -t 16 -wl 4
@@ -28,6 +28,8 @@ random_placement_key = 1984
 # python embed.py -i /mnt/ssd1/H264_dirty_detect/video/speed_bag_300.mp4 -o video/speed_bag_300_wm_wl4.mp4 -k 66666 -cl 60 -t 16 -wl 4
 
 # python embed.py -i /mnt/ssd1/H264_dirty_detect/video/life_300.mp4 -o video/life_300_wm_rpk1984.mp4 -k 66666 -cl 60 -t 16 -wl 4 -rpk 1984
+# python embed.py -i /mnt/ssd1/H264_dirty_detect/video/life_300.mp4 -o video/life_300_wm_rpk1984_lowu.mp4 -k 66666 -cl 60 -t 16 -wl 4 -rpk 1984
+# python embed.py -i /mnt/ssd1/H264_dirty_detect/video/life_300.mp4 -o video/life_300_wm_rpk1984_lowu_diff.mp4 -k 66666 -cl 60 -t 16 -wl 4 -rpk 1984
 
 
 parser = argparse.ArgumentParser(
@@ -49,7 +51,7 @@ parser.add_argument(
     "-rpk",
     dest="random_placement_key",
     type=int,
-    default=1984,
+    default=9260,
     help="Set random_placement_key",
 )
 

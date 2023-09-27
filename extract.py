@@ -19,7 +19,7 @@ highpass_str = 5
 lowpass_str = 4
 threads = 16
 wm_level = 4
-random_placement_key = 1984
+random_placement_key = 9260
 
 # python extract.py -i video/life_300_wm.mp4 -o result/life_300_wm.json -k 66666 -cl 60 -t 16 -wl 4
 # python extract.py -i /mnt/ssd1/H264_dirty_detect/experiment_diff_crf_NCC_key/video/life_300_wm_crf29.mp4 -o result/life_300_wm_crf29.json -k 66666 -cl 60 -t 16
@@ -33,6 +33,9 @@ random_placement_key = 1984
 
 # python extract.py -i video/life_300_wm_sk-1.mp4 -o result/life_300_wm_sk-1.json -k 66666 -cl 60 -t 16 -wl 4 -sk -1
 # python extract.py -i video/life_300_wm_rpk1984.mp4 -o result/life_300_wm_rpk1984.json -k 66666 -cl 60 -t 16 -wl 4 -rpk 1984
+# python extract.py -i video/life_300_wm_rpk1984_lowu.mp4 -o result/life_300_wm_rpk1984_lowu.json -k 66666 -cl 60 -t 16 -wl 4 -rpk 1984
+# python extract.py -i video/life_300_wm_rpk1984_lowu_diff.mp4 -o result/life_300_wm_rpk1984_lowu_diff.json -k 66666 -cl 60 -t 16 -wl 4 -rpk 1984
+
 
 parser = argparse.ArgumentParser(description="Blind Video Watermarking in DTCWT Domain")
 parser.add_argument(
@@ -59,7 +62,7 @@ parser.add_argument(
     "-rpk",
     dest="random_placement_key",
     type=int,
-    default=1984,
+    default=9260,
     help="Set random_placement_key",
 )
 
@@ -493,15 +496,15 @@ while True:
 overlap_wm /= frame_idx + 1
 overlap_key = recover_string_from_image(bit_to_pixel, code_length, overlap_wm)
 
-# cv2.imwrite(f"wm/overlap.png", overlap_wm)
+cv2.imwrite(f"wm/overlap.png", overlap_wm)
 
-overlap_filename = os.path.basename(video_path)
-overlap_filename = os.path.splitext(overlap_filename)[0]
-print(f"/mnt/ssd1/H264_dirty_detect/Experiment/wm/{overlap_filename}.png")
-cv2.imwrite(
-    f"/mnt/ssd1/H264_dirty_detect/Experiment/wm/{overlap_filename}.png",
-    overlap_wm,
-)
+# overlap_filename = os.path.basename(video_path)
+# overlap_filename = os.path.splitext(overlap_filename)[0]
+# print(f"/mnt/ssd1/H264_dirty_detect/Experiment/wm/{overlap_filename}.png")
+# cv2.imwrite(
+#     f"/mnt/ssd1/H264_dirty_detect/Experiment/wm/{overlap_filename}.png",
+#     overlap_wm,
+# )
 
 # output_dict = {"keys": keys, "ans": random_binary_string}
 output_dict = {"keys": [overlap_key], "ans": random_binary_string}
