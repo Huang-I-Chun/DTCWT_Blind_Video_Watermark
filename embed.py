@@ -18,7 +18,6 @@ highpass_str = 5
 lowpass_str = 4
 threads = 16
 wm_level = 4
-random_placement_key = 9260
 
 # python embed.py -i /mnt/ssd1/H264_dirty_detect/video/life_300.mp4 -o video/life_300_wm.mp4 -k 66666 -cl 60 -t 16 -wl 4
 # python embed.py -i /mnt/ssd1/H264_dirty_detect/video/park_joy_300.mp4 -o video/park_joy_300_wm.mp4 -k 66666 -cl 60 -t 16 -wl 4
@@ -27,10 +26,7 @@ random_placement_key = 9260
 
 # python embed.py -i /mnt/ssd1/H264_dirty_detect/video/speed_bag_300.mp4 -o video/speed_bag_300_wm_wl4.mp4 -k 66666 -cl 60 -t 16 -wl 4
 
-# python embed.py -i /mnt/ssd1/H264_dirty_detect/video/life_300.mp4 -o video/life_300_wm_rpk1984.mp4 -k 66666 -cl 60 -t 16 -wl 4 -rpk 1984
-# python embed.py -i /mnt/ssd1/H264_dirty_detect/video/life_300.mp4 -o video/life_300_wm_rpk1984_lowu.mp4 -k 66666 -cl 60 -t 16 -wl 4 -rpk 1984
-# python embed.py -i /mnt/ssd1/H264_dirty_detect/video/life_300.mp4 -o video/life_300_wm_rpk1984_lowu_diff.mp4 -k 66666 -cl 60 -t 16 -wl 4 -rpk 1984
-
+# python embed.py -i /mnt/ssd1/H264_dirty_detect/video/life_300.mp4 -o video/life_300_wm.mp4 -k 66666 -cl 60 -t 16 -wl 4
 
 parser = argparse.ArgumentParser(
     description="Blind Video Watermarking in DT CWT Domain"
@@ -45,14 +41,6 @@ parser.add_argument("-k", dest="key", type=int, help="Set key", required=True)
 
 parser.add_argument(
     "-cl", dest="code_length", type=int, help="Set code length", required=True
-)
-
-parser.add_argument(
-    "-rpk",
-    dest="random_placement_key",
-    type=int,
-    default=9260,
-    help="Set random_placement_key",
 )
 
 parser.add_argument(
@@ -110,7 +98,6 @@ highpass_str = args.highpass_str
 lowpass_str = args.lowpass_str
 threads = args.threads
 wm_level = args.wm_level
-random_placement_key = args.random_placement_key
 
 
 # utility functions ----------------------------------------------------------------------
@@ -335,36 +322,45 @@ def embed_frame(frame, wm_coeffs):
         masks3[i] *= 1.0 / max(12.0, np.amax(masks3[i]))
         # print(masks3[i].shape) (135, 240)
 
-    small_matrixs = []
-    # 4 times redudant in each level
-    small_matrixs.append(wm_coeffs.lowpass)
-    small_matrixs.append(wm_coeffs.lowpass)
-    small_matrixs.append(wm_coeffs.lowpass)
-    small_matrixs.append(wm_coeffs.lowpass)
-
-    for lv in range(wm_level):
-        # 4 times redudant in each level
-        small_matrixs.append(wm_coeffs.highpasses[lv][:, :, 0])
-        small_matrixs.append(wm_coeffs.highpasses[lv][:, :, 0])
-        small_matrixs.append(wm_coeffs.highpasses[lv][:, :, 0])
-        small_matrixs.append(wm_coeffs.highpasses[lv][:, :, 0])
-
-    # Note that first 4 position is for lowpass
-    random_positions = get_random_pos(
-        masks3[0].shape, small_matrixs, random_placement_key
-    )
-
     for i in range(6):
         coeffs = np.zeros(masks3[i].shape, dtype="complex_")
 
-        small_matrixs = []
         for lv in range(wm_level):
-            small_matrixs.append(wm_coeffs.highpasses[lv][:, :, i])
-            small_matrixs.append(wm_coeffs.highpasses[lv][:, :, i])
-            small_matrixs.append(wm_coeffs.highpasses[lv][:, :, i])
-            small_matrixs.append(wm_coeffs.highpasses[lv][:, :, i])
+            w = 0
+            h = 0
+            for m in range(lv):
+                w += wm_coeffs.highpasses[m][:, :, i].shape[1]
+                h += wm_coeffs.highpasses[m][:, :, i].shape[0]
 
-        coeffs = place_random_pos(coeffs, small_matrixs, random_positions[4:])
+            coeffs[
+                h : h + wm_coeffs.highpasses[lv][:, :, i].shape[0],
+                w : w + wm_coeffs.highpasses[lv][:, :, i].shape[1],
+            ] = wm_coeffs.highpasses[lv][:, :, i]
+            coeffs[
+                coeffs.shape[0]
+                - h
+                - wm_coeffs.highpasses[lv][:, :, i].shape[0] : coeffs.shape[0]
+                - h,
+                w : w + wm_coeffs.highpasses[lv][:, :, i].shape[1],
+            ] = wm_coeffs.highpasses[lv][:, :, i]
+            coeffs[
+                h : h + wm_coeffs.highpasses[lv][:, :, i].shape[0],
+                coeffs.shape[1]
+                - w
+                - wm_coeffs.highpasses[lv][:, :, i].shape[1] : coeffs.shape[1]
+                - w,
+            ] = wm_coeffs.highpasses[lv][:, :, i]
+            coeffs[
+                coeffs.shape[0]
+                - h
+                - wm_coeffs.highpasses[lv][:, :, i].shape[0] : coeffs.shape[0]
+                - h,
+                coeffs.shape[1]
+                - w
+                - wm_coeffs.highpasses[lv][:, :, i].shape[1] : coeffs.shape[1]
+                - w,
+            ] = wm_coeffs.highpasses[lv][:, :, i]
+
         img_coeffs.highpasses[2][:, :, i] += highpass_str * (masks3[i] * coeffs)
 
     ### embed watermark lowpass into V channel's highpass[2] (highpass as mask)
@@ -390,10 +386,7 @@ def embed_frame(frame, wm_coeffs):
         # print(coeff.shape) (68, 120)
         h, w = coeff.shape
         coeffs = np.zeros(lowpass_masks[i].shape)
-        coeffs[
-            random_positions[0][0] : random_positions[0][1],
-            random_positions[0][2] : random_positions[0][3],
-        ] = coeff
+        coeffs[2 * lv1_h : 2 * lv1_h + h, 2 * lv1_w : 2 * lv1_w + w] = coeff
         v_coeffs.highpasses[2][:, :, i] += lowpass_str * (lowpass_masks[i] * coeffs)
 
     img[:, :, 1] = img_transform.inverse(img_coeffs)

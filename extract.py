@@ -19,7 +19,7 @@ highpass_str = 5
 lowpass_str = 4
 threads = 16
 wm_level = 4
-random_placement_key = 9260
+
 
 # python extract.py -i video/life_300_wm.mp4 -o result/life_300_wm.json -k 66666 -cl 60 -t 16 -wl 4
 # python extract.py -i /mnt/ssd1/H264_dirty_detect/experiment_diff_crf_NCC_key/video/life_300_wm_crf29.mp4 -o result/life_300_wm_crf29.json -k 66666 -cl 60 -t 16
@@ -31,10 +31,7 @@ random_placement_key = 9260
 # python extract.py -i video/speed_bag_300_wm_wl4_crf35.mp4 -o result/speed_bag_300_wm_wl4_crf35.json -k 66666 -cl 60 -t 16 -wl 4
 
 
-# python extract.py -i video/life_300_wm_sk-1.mp4 -o result/life_300_wm_sk-1.json -k 66666 -cl 60 -t 16 -wl 4 -sk -1
-# python extract.py -i video/life_300_wm_rpk1984.mp4 -o result/life_300_wm_rpk1984.json -k 66666 -cl 60 -t 16 -wl 4 -rpk 1984
-# python extract.py -i video/life_300_wm_rpk1984_lowu.mp4 -o result/life_300_wm_rpk1984_lowu.json -k 66666 -cl 60 -t 16 -wl 4 -rpk 1984
-# python extract.py -i video/life_300_wm_rpk1984_lowu_diff.mp4 -o result/life_300_wm_rpk1984_lowu_diff.json -k 66666 -cl 60 -t 16 -wl 4 -rpk 1984
+# python extract.py -i video/life_300_wm.mp4 -o result/life_300_wm.json -k 66666 -cl 60 -t 16 -wl 4
 
 
 parser = argparse.ArgumentParser(description="Blind Video Watermarking in DTCWT Domain")
@@ -56,14 +53,6 @@ parser.add_argument(
     type=int,
     default=2,
     help="Set 1 bit equal to how many pixels",
-)
-
-parser.add_argument(
-    "-rpk",
-    dest="random_placement_key",
-    type=int,
-    default=9260,
-    help="Set random_placement_key",
 )
 
 parser.add_argument(
@@ -112,7 +101,6 @@ highpass_str = args.highpass_str
 lowpass_str = args.lowpass_str
 threads = args.threads
 wm_level = args.wm_level
-random_placement_key = args.random_placement_key
 
 
 wm_coeffs = 0
@@ -346,53 +334,31 @@ def decode_frame(wmed_img):
         w = (w + 1) // 2
         # print(my_highpass[i].shape)
 
-    lowpass = np.zeros(
-        (my_highpass[-1].shape[0] * 2, my_highpass[-1].shape[1] * 2), dtype="complex_"
-    )
-
-    small_matrixs = []
-    small_matrixs.append(lowpass)
-    small_matrixs.append(lowpass)
-    small_matrixs.append(lowpass)
-    small_matrixs.append(lowpass)
-    for lv in range(wm_level):
-        # 4 times redudant in each level
-        small_matrixs.append(my_highpass[lv][:, :, 0])
-        small_matrixs.append(my_highpass[lv][:, :, 0])
-        small_matrixs.append(my_highpass[lv][:, :, 0])
-        small_matrixs.append(my_highpass[lv][:, :, 0])
-
-    random_positions = get_random_pos(
-        inv_masks3[0].shape, small_matrixs, random_placement_key
-    )
-
     for i in range(6):
         coeff = (wmed_coeffs.highpasses[2][:, :, i]) * inv_masks3[i] * 1 / highpass_str
+        for lv in range(wm_level):
+            w = 0
+            h = 0
+            for m in range(lv):
+                # print(my_highpass[m].shape)
+                w += my_highpass[m].shape[1]
+                h += my_highpass[m].shape[0]
 
-        for level in range(wm_level):
-            lv = level + 1  # to avoid first 4 position for lowpass
-            # print(random_positions[lv * 4])
-            # print(random_positions[lv * 4 + 1])
-            # print(random_positions[lv * 4 + 2])
-            # print(random_positions[lv * 4 + 3])
-            # print(my_highpass[level][:, :, i].shape)
-
-            my_highpass[level][:, :, i] = (
+            my_highpass[lv][:, :, i] = (
                 coeff[
-                    random_positions[lv * 4][0] : random_positions[lv * 4][1],
-                    random_positions[lv * 4][2] : random_positions[lv * 4][3],
+                    h : h + my_highpass[lv].shape[0], w : w + my_highpass[lv].shape[1]
                 ]
                 + coeff[
-                    random_positions[lv * 4 + 1][0] : random_positions[lv * 4 + 1][1],
-                    random_positions[lv * 4 + 1][2] : random_positions[lv * 4 + 1][3],
+                    coeff.shape[0] - h - my_highpass[lv].shape[0] : coeff.shape[0] - h,
+                    w : w + my_highpass[lv].shape[1],
                 ]
                 + coeff[
-                    random_positions[lv * 4 + 2][0] : random_positions[lv * 4 + 2][1],
-                    random_positions[lv * 4 + 2][2] : random_positions[lv * 4 + 2][3],
+                    h : h + my_highpass[lv].shape[0],
+                    coeff.shape[1] - w - my_highpass[lv].shape[1] : coeff.shape[1] - w,
                 ]
                 + coeff[
-                    random_positions[lv * 4 + 3][0] : random_positions[lv * 4 + 3][1],
-                    random_positions[lv * 4 + 3][2] : random_positions[lv * 4 + 3][3],
+                    coeff.shape[0] - h - my_highpass[lv].shape[0] : coeff.shape[0] - h,
+                    coeff.shape[1] - w - my_highpass[lv].shape[1] : coeff.shape[1] - w,
                 ]
             )
 
@@ -417,11 +383,17 @@ def decode_frame(wmed_img):
         lowpass_masks[i][lowpass_masks[i] == 0] = 0.01
         inv_lowpass_masks[i] = 1.0 / lowpass_masks[i]
 
+    lowpass = np.zeros(
+        (my_highpass[-1].shape[0] * 2, my_highpass[-1].shape[1] * 2), dtype="complex_"
+    )
+
     for i in range(4):
-        coeff = (v_coeffs.highpasses[2][:, :, i]) * inv_masks3[i] * 1 / lowpass_str
+        coeff = (v_coeffs.highpasses[2][:, :, i]) * inv_masks3[i] * 1 / highpass_str
         lowpass[:, :] += coeff[
-            random_positions[0][0] : random_positions[0][1],
-            random_positions[0][2] : random_positions[0][3],
+            2 * my_highpass[0].shape[0] : 2 * my_highpass[0].shape[0]
+            + 2 * my_highpass[-1].shape[0],
+            2 * my_highpass[0].shape[1] : 2 * my_highpass[0].shape[1]
+            + 2 * my_highpass[-1].shape[1],
         ]
 
     lowpass = lowpass.real.astype(np.float32)
