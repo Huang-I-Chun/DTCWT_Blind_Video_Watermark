@@ -496,15 +496,15 @@ while True:
 overlap_wm /= frame_idx + 1
 overlap_key = recover_string_from_image(bit_to_pixel, code_length, overlap_wm)
 
-cv2.imwrite(f"wm/overlap.png", overlap_wm)
+# cv2.imwrite(f"wm/overlap.png", overlap_wm)
 
-# overlap_filename = os.path.basename(video_path)
-# overlap_filename = os.path.splitext(overlap_filename)[0]
+overlap_filename = os.path.basename(video_path)
+overlap_filename = os.path.splitext(overlap_filename)[0]
 # print(f"/mnt/ssd1/H264_dirty_detect/Experiment/wm/{overlap_filename}.png")
-# cv2.imwrite(
-#     f"/mnt/ssd1/H264_dirty_detect/Experiment/wm/{overlap_filename}.png",
-#     overlap_wm,
-# )
+cv2.imwrite(
+    f"/mnt/ssd1/H264_dirty_detect/Experiment/wm/{overlap_filename}.png",
+    overlap_wm,
+)
 
 # output_dict = {"keys": keys, "ans": random_binary_string}
 output_dict = {"keys": [overlap_key], "ans": random_binary_string}
