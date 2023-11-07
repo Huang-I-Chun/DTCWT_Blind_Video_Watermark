@@ -13,7 +13,7 @@ output_path = "video/life_300_wm.mp4"
 key = 9999
 code_length = 500
 bit_to_pixel = 2
-step = 5
+step = 5  # The larger, the more imperceptible
 highpass_str = 5
 lowpass_str = 4
 threads = 16
@@ -27,6 +27,7 @@ wm_level = 4
 # python embed.py -i /mnt/ssd1/H264_dirty_detect/video/speed_bag_300.mp4 -o video/speed_bag_300_wm_wl4.mp4 -k 66666 -cl 60 -t 16 -wl 4
 
 # python embed.py -i /mnt/ssd1/H264_dirty_detect/video/life_300.mp4 -o video/life_300_wm.mp4 -k 66666 -cl 60 -t 16 -wl 4
+# python embed.py -i /mnt/ssd1/H264_dirty_detect/video/life_300.mp4 -o video/life_300_wm_k2486.mp4 -k 2486 -cl 60 -t 16 -wl 4
 
 parser = argparse.ArgumentParser(
     description="Blind Video Watermarking in DT CWT Domain"

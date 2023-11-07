@@ -33,6 +33,8 @@ wm_level = 4
 
 # python extract.py -i video/life_300_wm.mp4 -o result/life_300_wm.json -k 66666 -cl 60 -t 16 -wl 4
 
+# python extract.py -i video/life_300_wm_k2486.mp4 -o result/life_300_wm_k2486.json -k 2486 -cl 60 -t 16 -wl 4
+# python extract.py -i video/life_300_wm_k2486_1920:1080.mp4 -o result/life_300_wm_k2486_1920:1080.json -k 2486 -cl 60 -t 16 -wl 4
 
 parser = argparse.ArgumentParser(description="Blind Video Watermarking in DTCWT Domain")
 parser.add_argument(
@@ -164,9 +166,9 @@ def recover_string_from_image(
     n,
     original_length,
     gray_image,
-    consider_black_threshold=3,
+    consider_black_threshold=40,
     black_appear_threshold=-1,
-    avg_color_threshold=40,
+    avg_color_threshold=83,
 ):
     # Initialize variables for position tracking
     row, col = 0, 0
@@ -388,7 +390,7 @@ def decode_frame(wmed_img):
     )
 
     for i in range(4):
-        coeff = (v_coeffs.highpasses[2][:, :, i]) * inv_masks3[i] * 1 / highpass_str
+        coeff = (v_coeffs.highpasses[2][:, :, i]) * inv_masks3[i] * 1 / lowpass_str
         lowpass[:, :] += coeff[
             2 * my_highpass[0].shape[0] : 2 * my_highpass[0].shape[0]
             + 2 * my_highpass[-1].shape[0],
@@ -439,9 +441,12 @@ wm_transform = dtcwt.Transform2d()
 wm_coeffs = wm_transform.forward(original_wm, nlevels=wm_level)
 
 keys = []
+perframe_keys = []
 frame_idx = 0
 
 overlap_wm = np.zeros((wm_h, wm_w))
+
+extract_wms = dict()
 
 while True:
     input_args = []
@@ -461,6 +466,8 @@ while True:
     for key, wm in pool_return:
         keys.append(key)
         overlap_wm += wm
+        curr_key = recover_string_from_image(bit_to_pixel, code_length, wm)
+        perframe_keys.append(curr_key)
         # cv2.imwrite(f"wm/{frame_idx}.png", wm)
         frame_idx += 1
 
@@ -469,6 +476,7 @@ overlap_wm /= frame_idx + 1
 overlap_key = recover_string_from_image(bit_to_pixel, code_length, overlap_wm)
 
 # cv2.imwrite(f"wm/overlap.png", overlap_wm)
+
 
 overlap_filename = os.path.basename(video_path)
 overlap_filename = os.path.splitext(overlap_filename)[0]
@@ -479,7 +487,11 @@ cv2.imwrite(
 )
 
 # output_dict = {"keys": keys, "ans": random_binary_string}
-output_dict = {"keys": [overlap_key], "ans": random_binary_string}
+output_dict = {
+    "keys": [overlap_key],
+    "ans": random_binary_string,
+    "perframe_keys": perframe_keys,
+}
 
 
 with open(output_path, "w") as json_file:
