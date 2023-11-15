@@ -34,6 +34,9 @@ wm_level = 4
 # python extract.py -i video/life_300_wm.mp4 -o result/life_300_wm.json -k 66666 -cl 60 -t 16 -wl 4
 
 # python extract.py -i video/life_300_wm_k2486.mp4 -o result/life_300_wm_k2486.json -k 2486 -cl 60 -t 16 -wl 4
+# python extract.py -i video/life_300_wm_k2486_vflip.mp4 -o result/life_300_wm_k2486_vflip.json -k 2486 -cl 60 -t 16 -wl 4
+# python extract.py -i video/life_300_wm_k2486_hflip.mp4 -o result/life_300_wm_k2486_hflip.json -k 2486 -cl 60 -t 16 -wl 4
+# python extract.py -i video/life_300_wm_k2486_5d.mp4 -o result/life_300_wm_k2486_5d.json -k 2486 -cl 60 -t 16 -wl 4
 # python extract.py -i video/life_300_wm_k2486_1920:1080.mp4 -o result/life_300_wm_k2486_1920:1080.json -k 2486 -cl 60 -t 16 -wl 4
 
 parser = argparse.ArgumentParser(description="Blind Video Watermarking in DTCWT Domain")
@@ -106,6 +109,78 @@ wm_level = args.wm_level
 
 
 wm_coeffs = 0
+
+
+x = np.array(
+    [
+        201.8083448840181,
+        201.65635643248135,
+        201.37170672855643,
+        200.8592226964692,
+        199.23487024944833,
+        195.25194811126022,
+        191.8126761620028,
+        187.44035977431795,
+        181.6775642641012,
+        174.43329279410978,
+        165.85723363933954,
+        161.47919075367426,
+        156.72325717258732,
+        152.02736535769264,
+        147.76242540533113,
+        143.30003808913443,
+        139.07401350683818,
+        135.21552660969684,
+        131.17617535127852,
+        126.6786417491157,
+        123.00818411501238,
+        118.72886262596417,
+        115.70126254295224,
+        111.97272383002851,
+        107.99399966101403,
+        101.66663601565126,
+        94.18656941872487,
+        71.03652862307095,
+    ]
+)
+y = np.array(
+    [
+        93,
+        87,
+        87,
+        90,
+        90,
+        87,
+        87,
+        84,
+        81,
+        66,
+        69,
+        75,
+        66,
+        75,
+        72,
+        69,
+        57,
+        63,
+        60,
+        54,
+        54,
+        45,
+        54,
+        54,
+        42,
+        42,
+        36,
+        30,
+    ]
+)
+
+# Fit a polynomial of degree 1 (linear)
+coefficients = np.polyfit(x, y, 2)
+
+# Create a polynomial function from the coefficients
+polynomial = np.poly1d(coefficients)
 
 
 # utility functions ----------------------------------------------------------------------
@@ -337,7 +412,26 @@ def decode_frame(wmed_img):
         # print(my_highpass[i].shape)
 
     for i in range(6):
-        coeff = (wmed_coeffs.highpasses[2][:, :, i]) * inv_masks3[i] * 1 / highpass_str
+        coeffs = (wmed_coeffs.highpasses[2][:, :, i]) * inv_masks3[i] * 1 / highpass_str
+
+        coeffs_height, coeffs_width = coeffs.shape
+        height_moving_offset = 2 * my_highpass[-1].shape[0] + 1
+        width_moving_offset = 2 * my_highpass[-1].shape[1] + 1
+
+        if coeffs_height % 2 == 1:
+            height_up = int(coeffs_height / 2) - height_moving_offset
+            height_down = int(coeffs_height / 2) + 1 + height_moving_offset
+        else:
+            height_up = int(coeffs_height / 2) - height_moving_offset
+            height_down = int(coeffs_height / 2) + height_moving_offset
+
+        if coeffs_width % 2 == 1:
+            width_left = int(coeffs_width / 2) - width_moving_offset
+            width_right = int(coeffs_width / 2) + 1 + width_moving_offset
+        else:
+            width_left = int(coeffs_width / 2) - width_moving_offset
+            width_right = int(coeffs_width / 2) + width_moving_offset
+
         for lv in range(wm_level):
             w = 0
             h = 0
@@ -347,20 +441,21 @@ def decode_frame(wmed_img):
                 h += my_highpass[m].shape[0]
 
             my_highpass[lv][:, :, i] = (
-                coeff[
-                    h : h + my_highpass[lv].shape[0], w : w + my_highpass[lv].shape[1]
+                coeffs[
+                    height_up - h - my_highpass[lv].shape[0] : height_up - h,
+                    width_left - w - my_highpass[lv].shape[1] : width_left - w,
                 ]
-                + coeff[
-                    coeff.shape[0] - h - my_highpass[lv].shape[0] : coeff.shape[0] - h,
-                    w : w + my_highpass[lv].shape[1],
+                + coeffs[
+                    height_up - h - my_highpass[lv].shape[0] : height_up - h,
+                    width_right + w : width_right + w + my_highpass[lv].shape[1],
                 ]
-                + coeff[
-                    h : h + my_highpass[lv].shape[0],
-                    coeff.shape[1] - w - my_highpass[lv].shape[1] : coeff.shape[1] - w,
+                + coeffs[
+                    height_down + h : height_down + h + my_highpass[lv].shape[0],
+                    width_left - w - my_highpass[lv].shape[1] : width_left - w,
                 ]
-                + coeff[
-                    coeff.shape[0] - h - my_highpass[lv].shape[0] : coeff.shape[0] - h,
-                    coeff.shape[1] - w - my_highpass[lv].shape[1] : coeff.shape[1] - w,
+                + coeffs[
+                    height_down + h : height_down + h + my_highpass[lv].shape[0],
+                    width_right + w : width_right + w + my_highpass[lv].shape[1],
                 ]
             )
 
@@ -389,13 +484,27 @@ def decode_frame(wmed_img):
         (my_highpass[-1].shape[0] * 2, my_highpass[-1].shape[1] * 2), dtype="complex_"
     )
 
+    coeffs_height, coeffs_width = y_coeffs.highpasses[2][:, :, 0].shape
+
+    if coeffs_height % 2 == 1:
+        height_up = int(coeffs_height / 2) - 1
+        height_down = int(coeffs_height / 2)
+    else:
+        height_up = int(coeffs_height / 2) - 1
+        height_down = int(coeffs_height / 2) - 1
+
+    if coeffs_width % 2 == 1:
+        width_left = int(coeffs_width / 2) - 1
+        width_right = int(coeffs_width / 2)
+    else:
+        width_left = int(coeffs_width / 2) - 1
+        width_right = int(coeffs_width / 2) - 1
+
     for i in range(4):
         coeff = (v_coeffs.highpasses[2][:, :, i]) * inv_masks3[i] * 1 / lowpass_str
         lowpass[:, :] += coeff[
-            2 * my_highpass[0].shape[0] : 2 * my_highpass[0].shape[0]
-            + 2 * my_highpass[-1].shape[0],
-            2 * my_highpass[0].shape[1] : 2 * my_highpass[0].shape[1]
-            + 2 * my_highpass[-1].shape[1],
+            height_up : height_up + lowpass.shape[0],
+            width_left : width_left + lowpass.shape[1],
         ]
 
     lowpass = lowpass.real.astype(np.float32)
@@ -473,7 +582,12 @@ while True:
 
 
 overlap_wm /= frame_idx + 1
-overlap_key = recover_string_from_image(bit_to_pixel, code_length, overlap_wm)
+filtered_arr = overlap_wm[overlap_wm >= 5]
+threshold = polynomial(np.mean(filtered_arr))
+
+overlap_key = recover_string_from_image(
+    bit_to_pixel, code_length, overlap_wm, 40, -1, threshold
+)
 
 # cv2.imwrite(f"wm/overlap.png", overlap_wm)
 
@@ -490,7 +604,7 @@ cv2.imwrite(
 output_dict = {
     "keys": [overlap_key],
     "ans": random_binary_string,
-    "perframe_keys": perframe_keys,
+    # "perframe_keys": perframe_keys,
 }
 
 

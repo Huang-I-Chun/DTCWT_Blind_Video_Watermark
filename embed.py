@@ -326,6 +326,24 @@ def embed_frame(frame, wm_coeffs):
     for i in range(6):
         coeffs = np.zeros(masks3[i].shape, dtype="complex_")
 
+        coeffs_height, coeffs_width = coeffs.shape
+        height_moving_offset = wm_coeffs.lowpass.shape[0] + 1
+        width_moving_offset = wm_coeffs.lowpass.shape[1] + 1
+
+        if coeffs_height % 2 == 1:
+            height_up = int(coeffs_height / 2) - height_moving_offset
+            height_down = int(coeffs_height / 2) + 1 + height_moving_offset
+        else:
+            height_up = int(coeffs_height / 2) - height_moving_offset
+            height_down = int(coeffs_height / 2) + height_moving_offset
+
+        if coeffs_width % 2 == 1:
+            width_left = int(coeffs_width / 2) - width_moving_offset
+            width_right = int(coeffs_width / 2) + 1 + width_moving_offset
+        else:
+            width_left = int(coeffs_width / 2) - width_moving_offset
+            width_right = int(coeffs_width / 2) + width_moving_offset
+
         for lv in range(wm_level):
             w = 0
             h = 0
@@ -334,32 +352,47 @@ def embed_frame(frame, wm_coeffs):
                 h += wm_coeffs.highpasses[m][:, :, i].shape[0]
 
             coeffs[
-                h : h + wm_coeffs.highpasses[lv][:, :, i].shape[0],
-                w : w + wm_coeffs.highpasses[lv][:, :, i].shape[1],
-            ] = wm_coeffs.highpasses[lv][:, :, i]
-            coeffs[
-                coeffs.shape[0]
+                height_up
                 - h
-                - wm_coeffs.highpasses[lv][:, :, i].shape[0] : coeffs.shape[0]
+                - wm_coeffs.highpasses[lv][:, :, i].shape[0] : height_up
                 - h,
-                w : w + wm_coeffs.highpasses[lv][:, :, i].shape[1],
-            ] = wm_coeffs.highpasses[lv][:, :, i]
-            coeffs[
-                h : h + wm_coeffs.highpasses[lv][:, :, i].shape[0],
-                coeffs.shape[1]
+                width_left
                 - w
-                - wm_coeffs.highpasses[lv][:, :, i].shape[1] : coeffs.shape[1]
+                - wm_coeffs.highpasses[lv][:, :, i].shape[1] : width_left
                 - w,
             ] = wm_coeffs.highpasses[lv][:, :, i]
+
             coeffs[
-                coeffs.shape[0]
+                height_up
                 - h
-                - wm_coeffs.highpasses[lv][:, :, i].shape[0] : coeffs.shape[0]
+                - wm_coeffs.highpasses[lv][:, :, i].shape[0] : height_up
                 - h,
-                coeffs.shape[1]
+                width_right
+                + w : width_right
+                + w
+                + wm_coeffs.highpasses[lv][:, :, i].shape[1],
+            ] = wm_coeffs.highpasses[lv][:, :, i]
+
+            coeffs[
+                height_down
+                + h : height_down
+                + h
+                + wm_coeffs.highpasses[lv][:, :, i].shape[0],
+                width_left
                 - w
-                - wm_coeffs.highpasses[lv][:, :, i].shape[1] : coeffs.shape[1]
+                - wm_coeffs.highpasses[lv][:, :, i].shape[1] : width_left
                 - w,
+            ] = wm_coeffs.highpasses[lv][:, :, i]
+
+            coeffs[
+                height_down
+                + h : height_down
+                + h
+                + wm_coeffs.highpasses[lv][:, :, i].shape[0],
+                width_right
+                + w : width_right
+                + w
+                + wm_coeffs.highpasses[lv][:, :, i].shape[1],
             ] = wm_coeffs.highpasses[lv][:, :, i]
 
         img_coeffs.highpasses[2][:, :, i] += highpass_str * (masks3[i] * coeffs)
@@ -380,14 +413,48 @@ def embed_frame(frame, wm_coeffs):
         )
         lowpass_masks[i] *= 1.0 / max(12.0, np.amax(lowpass_masks[i]))
 
-    lv1_h = wm_coeffs.highpasses[0][:, :, i].shape[0]
-    lv1_w = wm_coeffs.highpasses[0][:, :, i].shape[1]
+    # lv1_h = wm_coeffs.highpasses[0][:, :, i].shape[0]
+    # lv1_w = wm_coeffs.highpasses[0][:, :, i].shape[1]
+
+    coeffs_height, coeffs_width = y_coeffs.highpasses[2][:, :, 0].shape
+
+    if coeffs_height % 2 == 1:
+        height_up = int(coeffs_height / 2) - 1
+        height_down = int(coeffs_height / 2)
+    else:
+        height_up = int(coeffs_height / 2) - 1
+        height_down = int(coeffs_height / 2) - 1
+
+    if coeffs_width % 2 == 1:
+        width_left = int(coeffs_width / 2) - 1
+        width_right = int(coeffs_width / 2)
+    else:
+        width_left = int(coeffs_width / 2) - 1
+        width_right = int(coeffs_width / 2) - 1
+
+    coeff = wm_coeffs.lowpass
+
+    if coeff.shape[0] % 2 != y_coeffs.highpasses[2][:, :, 0].shape[0] % 2:
+        temp = np.zeros((coeff.shape[0] + 1, coeff.shape[1]))
+        temp[: coeff.shape[0], :] = coeff
+        temp[-1:, :] = coeff[0, :]
+        coeff = temp
+
+    if coeff.shape[1] % 2 != y_coeffs.highpasses[2][:, :, 0].shape[1] % 2:
+        temp = np.zeros((coeff.shape[0], coeff.shape[1] + 1))
+        temp[:, : coeff.shape[1]] = coeff
+        temp[:, -1:] = coeff[:, 0].reshape(
+            (temp[:, -1:].shape[0], temp[:, -1:].shape[1])
+        )
+        coeff = temp
+
     for i in range(4):
-        coeff = wm_coeffs.lowpass
-        # print(coeff.shape) (68, 120)
-        h, w = coeff.shape
         coeffs = np.zeros(lowpass_masks[i].shape)
-        coeffs[2 * lv1_h : 2 * lv1_h + h, 2 * lv1_w : 2 * lv1_w + w] = coeff
+        coeffs[
+            height_up : height_up + coeff.shape[0],
+            width_left : width_left + coeff.shape[1],
+        ] = coeff
+
         v_coeffs.highpasses[2][:, :, i] += lowpass_str * (lowpass_masks[i] * coeffs)
 
     img[:, :, 1] = img_transform.inverse(img_coeffs)
