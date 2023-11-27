@@ -24,11 +24,15 @@ Go to `demo.ipynb` and click `run all`. This notebook will emebed/extract the wa
 ## Demo: Video Watermark Embedding 
 Run following command:
 
-```python embed.py -i [INPUT_VIDEO_PATH] -o [OUTPUT_VIDEO_PATH] -k [KEY] -cl [CODE_LENGTH] -t [CORE_NUM]```
+```bach
+python embed.py -i [INPUT_VIDEO_PATH] -o [OUTPUT_VIDEO_PATH] -k [KEY] -cl [CODE_LENGTH] -t [CORE_NUM]
+```
 
 Example command:
 
-```python embed.py -i video/life_300.mp4 -o video/life_300_wm.mp4 -k 2948  -t 16```
+```bach
+python embed.py -i video/life_300.mp4 -o video/life_300_wm.mp4 -k 2948  -t 16
+```
 
 `-i video/life_300.mp4`: the input raw video path without watermark
 
@@ -49,11 +53,15 @@ For more informations (such as adjusting the strength):
 ## Demo: Video Watermark Extracting 
 Run following command:
 
-```python extract.py -i [INPUT_VIDEO_PATH] -o [OUTPUT_VIDEO_PATH] -k [KEY] -cl [CODE_LENGTH] -t [CORE_NUM]```
+```bach
+python extract.py -i [INPUT_VIDEO_PATH] -o [OUTPUT_VIDEO_PATH] -k [KEY] -cl [CODE_LENGTH] -t [CORE_NUM]
+```
 
 Example command:
 
-```python extract.py -i video/life_300_wm.mp4 -o result/life_300_wm.json -k 2948 -cl 60 -t 16```
+```bach
+python extract.py -i video/life_300_wm.mp4 -o result/life_300_wm.json -k 2948 -cl 60 -t 16
+```
 
 `-i video/life_300_wm.mp4`: the input watermarked video path
 
