@@ -1,5 +1,3 @@
-# PC_error_concealment
-
 ## Environment setting
 Testing Environment Version:
 
