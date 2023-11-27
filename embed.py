@@ -229,6 +229,52 @@ def generate_image(random_binary_string, width, height, n):
     return image
 
 
+def create_symmetrical_array(large_width, large_height, small_array):
+    """
+    Create a large 2D array with a given small array duplicated and mirrored to be symmetrical.
+    Fill any remaining blank spaces in the center with 1s.
+
+    Args:
+    large_width (int): Width of the large array.
+    large_height (int): Height of the large array.
+    small_array (numpy.ndarray): A small 2D array to be duplicated and mirrored.
+
+    Returns:
+    numpy.ndarray: A large symmetrical array.
+    """
+    # Validate input dimensions
+    if (
+        large_width < small_array.shape[1] * 2
+        or large_height < small_array.shape[0] * 2
+    ):
+        raise ValueError(
+            "Large array must be at least twice as large as the small array in both dimensions."
+        )
+
+    # Duplicate and mirror the small array
+    mirrored_small = np.block(
+        [
+            [small_array, small_array[:, ::-1]],
+            [small_array[::-1, :], small_array[::-1, ::-1]],
+        ]
+    )
+
+    # Initialize the large array with ones
+    large_array = np.ones((large_height, large_width), dtype=small_array.dtype)
+
+    # Calculate the start and end indices for placing the small arrays
+    start_x, end_x = 0, small_array.shape[1]
+    start_y, end_y = 0, small_array.shape[0]
+
+    # Place the small arrays at the corners of the large array
+    large_array[start_y:end_y, start_x:end_x] = small_array
+    large_array[start_y:end_y, -end_x:] = small_array[:, ::-1]
+    large_array[-end_y:, start_x:end_x] = small_array[::-1, :]
+    large_array[-end_y:, -end_x:] = small_array[::-1, ::-1]
+
+    return large_array
+
+
 def get_random_pos(big_matrix_shape, small_matrices, seed=None):
     # Set seed for reproducibility
     random.seed(seed)
@@ -493,13 +539,19 @@ if wm_w % 2 == 1:
 if wm_h % 2 == 1:
     wm_h += 1
 
-if (wm_w // bit_to_pixel) * (wm_h // bit_to_pixel) < code_length:
+if (wm_w // bit_to_pixel) * (wm_h // bit_to_pixel) / 4 < code_length:
     print("code length is too long")
     quit()
 
 # generate wm
 random_binary_string = generate_random_binary_string(code_length, key)
-wm = generate_image(random_binary_string, wm_w, wm_h, bit_to_pixel)
+image = generate_image(random_binary_string, int(wm_w / 2), int(wm_h / 2), bit_to_pixel)
+wm = create_symmetrical_array(wm_w, wm_h, image)
+
+# cv2.imwrite(f"wm/embed_wm.png", wm)
+
+# random_binary_string = generate_random_binary_string(code_length, key)
+# wm = generate_image(random_binary_string, wm_w, wm_h, bit_to_pixel)
 wm_transform = dtcwt.Transform2d()
 # If nlevel is 1, then len(highpass) == 1
 wm_coeffs = wm_transform.forward(wm, nlevels=wm_level)

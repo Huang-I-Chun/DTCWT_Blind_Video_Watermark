@@ -111,6 +111,7 @@ wm_level = args.wm_level
 wm_coeffs = 0
 
 
+# y = f(x), generate the relationship function between "key image brightness" & "detect color threshold"
 x = np.array(
     [
         201.8083448840181,
@@ -372,6 +373,39 @@ def place_random_pos(big_matrix, small_matrices, random_pos):
     return big_matrix
 
 
+def extract_and_average_small_arrays(large_array, small_width, small_height):
+    """
+    Extract four small arrays from a large symmetrical array, normalize their orientations,
+    and calculate their average.
+
+    Args:
+    large_array (numpy.ndarray): The large symmetrical array.
+    small_width (int): Width of the small array.
+    small_height (int): Height of the small array.
+
+    Returns:
+    numpy.ndarray: The averaged small array.
+    """
+
+    large_array = large_array.astype(np.float64)
+
+    # Extract the four small arrays
+    small_array_1 = large_array[:small_height, :small_width]
+    small_array_2 = large_array[:small_height, -small_width:]
+    small_array_3 = large_array[-small_height:, :small_width]
+    small_array_4 = large_array[-small_height:, -small_width:]
+
+    # Normalize orientation of the small arrays
+    small_array_2 = small_array_2[:, ::-1]
+    small_array_3 = small_array_3[::-1, :]
+    small_array_4 = small_array_4[::-1, ::-1]
+
+    # Calculate the average of the four small arrays
+    average_array = (small_array_1 + small_array_2 + small_array_3 + small_array_4) / 4
+
+    return average_array
+
+
 def decode_frame(wmed_img):
     wmed_img = cv2.cvtColor(wmed_img.astype(np.float32), cv2.COLOR_BGR2YUV)
 
@@ -512,8 +546,15 @@ def decode_frame(wmed_img):
     t = dtcwt.Transform2d()
     wm = t.inverse(dtcwt.Pyramid(lowpass, highpasses))
 
-    recovered_string = recover_string_from_image(bit_to_pixel, code_length, wm)
+    avg_img = extract_and_average_small_arrays(
+        wm, int(wm.shape[1] / 2), int(wm.shape[0] / 2)
+    )
+
+    recovered_string = recover_string_from_image(bit_to_pixel, code_length, avg_img)
     return recovered_string, wm
+
+    # recovered_string = recover_string_from_image(bit_to_pixel, code_length, wm)
+    # return recovered_string, wm
 
 
 # Code Start here ------------------------------------------------------------------------
@@ -575,7 +616,16 @@ while True:
     for key, wm in pool_return:
         keys.append(key)
         overlap_wm += wm
-        curr_key = recover_string_from_image(bit_to_pixel, code_length, wm)
+
+        filtered_arr = wm[wm >= 5]
+        threshold = polynomial(np.mean(filtered_arr))
+        small_img = extract_and_average_small_arrays(
+            wm, int(wm.shape[1] / 2), int(wm.shape[0] / 2)
+        )
+
+        curr_key = recover_string_from_image(
+            bit_to_pixel, code_length, small_img, 40, -1, threshold
+        )
         perframe_keys.append(curr_key)
         # cv2.imwrite(f"wm/{frame_idx}.png", wm)
         frame_idx += 1
@@ -585,11 +635,19 @@ overlap_wm /= frame_idx + 1
 filtered_arr = overlap_wm[overlap_wm >= 5]
 threshold = polynomial(np.mean(filtered_arr))
 
-overlap_key = recover_string_from_image(
-    bit_to_pixel, code_length, overlap_wm, 40, -1, threshold
+avg_img = extract_and_average_small_arrays(
+    overlap_wm, int(overlap_wm.shape[1] / 2), int(overlap_wm.shape[0] / 2)
 )
 
-# cv2.imwrite(f"wm/overlap.png", overlap_wm)
+overlap_key = recover_string_from_image(
+    bit_to_pixel, code_length, avg_img, 40, -1, threshold
+)
+
+# overlap_key = recover_string_from_image(
+#     bit_to_pixel, code_length, overlap_wm, 40, -1, threshold
+# )
+
+cv2.imwrite(f"wm/overlap.png", overlap_wm)
 
 
 overlap_filename = os.path.basename(video_path)
@@ -604,7 +662,7 @@ cv2.imwrite(
 output_dict = {
     "keys": [overlap_key],
     "ans": random_binary_string,
-    # "perframe_keys": perframe_keys,
+    "perframe_keys": perframe_keys,
 }
 
 
