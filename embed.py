@@ -30,6 +30,7 @@ import dtcwt
 import multiprocessing
 import heapq
 import argparse
+import subprocess
 
 # global parameter
 video_path = "/mnt/ssd1/H264_dirty_detect/video/life_300.mp4"
@@ -549,10 +550,42 @@ frame_height = int(video_capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
 total_frames = int(video_capture.get(cv2.CAP_PROP_FRAME_COUNT))
 
 
-fourcc = cv2.VideoWriter_fourcc(*"mp4v")  # mp4
-video_writer = cv2.VideoWriter(
-    output_path, fourcc, fps, (frame_width, frame_height)
-)  # note: width height position seem to be oppsite of shape
+# fourcc = cv2.VideoWriter_fourcc(*"mp4v")  # mp4
+# video_writer = cv2.VideoWriter(
+#     output_path, fourcc, fps, (frame_width, frame_height)
+# )  # note: width height position seem to be oppsite of shape
+
+
+filename1 = os.path.splitext(os.path.basename(video_path))[0]
+filename2 = os.path.splitext(os.path.basename(output_path))[0]
+output_folder = (
+    "/mnt/ssd1/H264_dirty_detect/DTCWT_Blind_Video_Watermark/"
+    + filename1
+    + "_"
+    + filename2
+    + "_encode"
+)
+
+if not os.path.exists(output_folder):
+    os.mkdir(f"{output_folder}")
+    os.mkdir(f"{output_folder}/pure_frame")
+    os.mkdir(f"{output_folder}/watermark_frame")
+
+
+command = [
+    "/usr/bin/ffmpeg",
+    "-y",
+    "-i",
+    f"{video_path}",
+    "-vsync",
+    "0",
+    "-frame_pts",
+    "true",
+    f"{output_folder}/pure_frame/%5d.png",
+]
+
+# Run the command
+process = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 
 # calculate the wm size that this cover image can afford
@@ -583,13 +616,12 @@ wm_coeffs = wm_transform.forward(wm, nlevels=wm_level)
 
 frame_idx = 0
 
-while True:
+for i in range(0, total_frames, threads):
     input_args = []
-    for i in range(threads):
-        ret, frame = video_capture.read()
-        if not ret:
-            break
-        else:
+    for j in range(threads):
+        if i + j < total_frames:
+            # print(f"{output_folder}/pure_frame/{str(i + j).zfill(5)}.png")
+            frame = cv2.imread(f"{output_folder}/pure_frame/{str(i + j).zfill(5)}.png")
             input_args.append((frame, wm_coeffs))
 
     if len(input_args) == 0:
@@ -599,8 +631,50 @@ while True:
         output_frames = pool.starmap(embed_frame, input_args)
 
     for frame in output_frames:
-        video_writer.write(frame)
+        cv2.imwrite(
+            f"{output_folder}/watermark_frame/{str(frame_idx).zfill(5)}.png", frame
+        )
+        frame_idx += 1
+
+command = [
+    "/usr/bin/ffmpeg",
+    "-y",
+    "-framerate",
+    "30",
+    "-i",
+    f"{output_folder}/watermark_frame/%5d.png",
+    "-c:v",
+    "ffv1",
+    f"{output_path}",
+]
+
+# Run the command
+process = subprocess.run(command)
+
+
+# remove folder
+import shutil
+
+shutil.rmtree(f"{output_folder}")
+
+# while True:
+#     input_args = []
+#     for i in range(threads):
+#         ret, frame = video_capture.read()
+#         if not ret:
+#             break
+#         else:
+#             input_args.append((frame, wm_coeffs))
+
+#     if len(input_args) == 0:
+#         break
+
+#     with multiprocessing.Pool(processes=threads) as pool:
+#         output_frames = pool.starmap(embed_frame, input_args)
+
+#     for frame in output_frames:
+#         video_writer.write(frame)
 
 # Release the video capture object
-video_capture.release()
-video_writer.release()
+# video_capture.release()
+# video_writer.release()

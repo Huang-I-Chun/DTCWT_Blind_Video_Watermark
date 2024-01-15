@@ -1,4 +1,4 @@
-'''
+"""
 MIT License
 
 Copyright (c) 2023 Huang I Chun
@@ -20,7 +20,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-'''
+"""
 
 import cv2
 import os
@@ -31,6 +31,7 @@ import multiprocessing
 import heapq
 import json
 import argparse
+import subprocess
 
 # global parameter
 video_path = "video/life_300_wm.mp4"
@@ -57,7 +58,8 @@ wm_level = 4
 
 # python extract.py -i video/life_300_wm.mp4 -o result/life_300_wm.json -k 66666 -cl 60 -t 16 -wl 4
 
-# python extract.py -i video/life_300_wm_k2486.mp4 -o result/life_300_wm_k2486.json -k 2486 -cl 60 -t 16 -wl 4
+# python extract.py -i video/life_300_wm_k2486.avi -o result/life_300_wm_k2486.json -k 2486 -cl 60 -t 16 -wl 4
+
 # python extract.py -i video/life_300_wm_k2486_vflip.mp4 -o result/life_300_wm_k2486_vflip.json -k 2486 -cl 60 -t 16 -wl 4
 # python extract.py -i video/life_300_wm_k2486_hflip.mp4 -o result/life_300_wm_k2486_hflip.json -k 2486 -cl 60 -t 16 -wl 4
 # python extract.py -i video/life_300_wm_k2486_5d.mp4 -o result/life_300_wm_k2486_5d.json -k 2486 -cl 60 -t 16 -wl 4
@@ -592,6 +594,35 @@ frame_height = int(video_capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
 total_frames = int(video_capture.get(cv2.CAP_PROP_FRAME_COUNT))
 
 
+filename1 = os.path.splitext(os.path.basename(video_path))[0]
+filename2 = os.path.splitext(os.path.basename(output_path))[0]
+output_folder = (
+    "/mnt/ssd1/H264_dirty_detect/DTCWT_Blind_Video_Watermark/"
+    + filename1
+    + "_"
+    + filename2
+    + "_decode"
+)
+
+if not os.path.exists(output_folder):
+    os.mkdir(f"{output_folder}")
+    os.mkdir(f"{output_folder}/watermark_frame")
+
+
+command = [
+    "/usr/bin/ffmpeg",
+    "-y",
+    "-i",
+    f"{video_path}",
+    "-vsync",
+    "0",
+    "-frame_pts",
+    "true",
+    f"{output_folder}/watermark_frame/%5d.png",
+]
+
+process = subprocess.run(command)
+
 # calculate the wm size that this cover image can afford
 wm_w = (((((frame_width + 1) // 2 + 1) // 2 + 1) // 2 + 1) // 2 + 1) // 2
 wm_h = (((((frame_height + 1) // 2 + 1) // 2 + 1) // 2 + 1) // 2 + 1) // 2
@@ -622,13 +653,15 @@ overlap_wm = np.zeros((wm_h, wm_w))
 
 extract_wms = dict()
 
-while True:
+
+for i in range(0, total_frames, threads):
     input_args = []
-    for i in range(threads):
-        ret, frame = video_capture.read()
-        if not ret:
-            break
-        else:
+    for j in range(threads):
+        if i + j < total_frames:
+            # print(f"{output_folder}/pure_frame/{str(i + j).zfill(5)}.png")
+            frame = cv2.imread(
+                f"{output_folder}/watermark_frame/{str(i + j).zfill(5)}.png"
+            )
             input_args.append(frame)
 
     if len(input_args) == 0:
@@ -653,6 +686,38 @@ while True:
         perframe_keys.append(curr_key)
         # cv2.imwrite(f"wm/{frame_idx}.png", wm)
         frame_idx += 1
+
+# while True:
+#     input_args = []
+#     for i in range(threads):
+#         ret, frame = video_capture.read()
+#         if not ret:
+#             break
+#         else:
+#             input_args.append(frame)
+
+#     if len(input_args) == 0:
+#         break
+
+#     with multiprocessing.Pool(processes=threads) as pool:
+#         pool_return = pool.map(decode_frame, input_args)
+
+#     for key, wm in pool_return:
+#         keys.append(key)
+#         overlap_wm += wm
+
+#         filtered_arr = wm[wm >= 5]
+#         threshold = polynomial(np.mean(filtered_arr))
+#         small_img = extract_and_average_small_arrays(
+#             wm, int(wm.shape[1] / 2), int(wm.shape[0] / 2)
+#         )
+
+#         curr_key = recover_string_from_image(
+#             bit_to_pixel, code_length, small_img, 40, -1, threshold
+#         )
+#         perframe_keys.append(curr_key)
+#         # cv2.imwrite(f"wm/{frame_idx}.png", wm)
+#         frame_idx += 1
 
 
 overlap_wm /= frame_idx + 1
@@ -695,3 +760,8 @@ with open(output_path, "w") as json_file:
 
 # Release the video capture object
 video_capture.release()
+
+# remove folder
+import shutil
+
+shutil.rmtree(f"{output_folder}")
